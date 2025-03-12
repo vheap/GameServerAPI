@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Identity;
 using WebApplication1.Models;
 using WebApplication1.Repositories;
 using WebApplication1.Utilities;
+using Microsoft.Extensions.Caching.Memory;
+using WebApplication1.Interface;
 
 namespace WebApplication1.Services
 {
@@ -11,12 +13,15 @@ namespace WebApplication1.Services
         private readonly UserRepository _userRepository;
         private readonly PasswordHasher _passwordHasher;
         private readonly JwtService _jwtService;
+        private readonly ITokenRepository _tokenRepository;
+        private readonly IMemoryCache _cache;
 
-        public AuthService(UserRepository userRepository, PasswordHasher passwordHasher, JwtService jwtService)
+        public AuthService(UserRepository userRepository, PasswordHasher passwordHasher, JwtService jwtService, ITokenRepository tokenRepository)
         {
             _userRepository = userRepository;
             _passwordHasher = passwordHasher;
             _jwtService = jwtService;
+            _tokenRepository = tokenRepository;
         }
 
         public async Task<AuthResult> RegisterUserAsync(Models.RegisterRequest request)
@@ -44,29 +49,25 @@ namespace WebApplication1.Services
         }
 
         public async Task<AuthResult> LoginUserAsync(Models.LoginRequest request)
-        {
+        {        
             var user = await _userRepository.GetUserByUsernameOrEmailAsync(request.Identifier);
             if (user == null)
-                return new AuthResult(false, "Invalid username or email.");
+                return new AuthResult(false, "Invalid credentials.");
 
             if (!_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
-                return new AuthResult(false, "Incorrect password.");
+                return new AuthResult(false, "Invalid credentials.");
 
-            var tokens = _jwtService.GenerateTokens(user.UserID.ToString(), user.Username);
-            if(tokens.AccessToken == null)
+            var tokens = _jwtService.GenerateTokensAsync(user.UserID.ToString(), user.Username);
+            if (tokens.Result.AccessToken == null)
                 return new AuthResult(false, "Login failed. Bad AccessToken.");
 
-            if (tokens.RefreshToken == null)
+            if (tokens.Result.RefreshToken == null)
                 return new AuthResult(false, "Login failed. Bad RefreshToken.");
 
-            return new AuthResult(true, "Login successful", tokens.AccessToken, tokens.RefreshToken);
-
-            var token = _jwtService.GenerateTokens(user.UserID.ToString(), user.Username).RefreshToken;
-            Console.WriteLine($"Debug: {token}");
-            return new AuthResult(true, "Login successful.", token);
-
+            return new AuthResult(true, "Login successful", tokens.Result.AccessToken, tokens.Result.RefreshToken);
 
         }
+
 
     }
 }

@@ -11,11 +11,13 @@ namespace WebApplication1.Controllers
     {
         private readonly AuthService _authService;
         private readonly JwtService _jwtService;
+        private readonly ILogger<AuthController> _logger;
 
-        public AuthController(AuthService authService, JwtService jwtService)
+        public AuthController(AuthService authService, JwtService jwtService, ILogger<AuthController> logger)
         {
             _authService = authService;
             _jwtService = jwtService;
+            _logger = logger;
         }
 
         [HttpPost("register")]
@@ -23,30 +25,74 @@ namespace WebApplication1.Controllers
         {
             var result = await _authService.RegisterUserAsync(request);
             if (!result.Success)
-                return BadRequest(result.Message);
-            return Ok(result);
+            {
+                _logger.LogWarning("Registration failed for user {Username}: {Message}", request.Username, result.Message);
+                return BadRequest(new { code = 400, message = result.Message });
+            }
+
+            _logger.LogInformation("User registered successfully: {Username}", request.Username);
+            return Ok(new { code = 200, message = result.Message });
         }
 
         [HttpPost("login")]
-        public IActionResult Login([FromBody] Models.LoginRequest request)
+        public async Task<IActionResult> Login([FromBody] Models.LoginRequest request)
         {
-            var authResult = _authService.LoginUserAsync(request).Result;
+            var authResult = await _authService.LoginUserAsync(request);
             if (!authResult.Success)
             {
-                return Unauthorized(new { message = authResult.Message });
+                _logger.LogWarning("Login failed for identifier {Identifier}: {Message}", request.Identifier, authResult.Message);
+                return Unauthorized(new { code = 401, message = authResult.Message });
             }
 
-            return Ok(new { success = authResult.Success, message = authResult.Message, accessToken = authResult.AccessToken, refreshToken = authResult.RefreshToken });
-        }
-        [HttpPost("refresh")]
-        public IActionResult RefreshToken([FromBody] string refreshToken)
-        {
-            var newAccessToken = _jwtService.RefreshAccessToken(refreshToken);
-            if (newAccessToken == null)
+            _logger.LogInformation("Login successful for identifier: {Identifier}", request.Identifier);
+            return Ok(new
             {
-                return Unauthorized(new { message = "Invalid or expired refresh token." });
+                code = 200,
+                message = authResult.Message,
+                accessToken = authResult.AccessToken,
+                refreshToken = authResult.RefreshToken
+            });
+        }
+
+        [HttpPost("refresh")]
+        public async Task<IActionResult> Refresh([FromBody] RefreshRequest request)
+        {
+            var newTokens = await _jwtService.RefreshTokensAsync(request.RefreshToken);
+            if (newTokens == null)
+            {
+                _logger.LogWarning("Token refresh failed for token: {RefreshToken}", request.RefreshToken);
+                return Unauthorized(new { code = 401, message = "Invalid or expired refresh token." });
             }
-            return Ok(new { accessToken = newAccessToken });
+
+            _logger.LogInformation("Token refreshed successfully.");
+            return Ok(new
+            {
+                code = 200,
+                message = "Token refreshed.",
+                accessToken = newTokens.Value.AccessToken,
+                refreshToken = newTokens.Value.RefreshToken
+            });
+        }
+
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout([FromBody] LogoutRequest request)
+        {
+            await _jwtService.LogoutAsync(request.UserId);
+            _logger.LogInformation("User {UserId} logged out successfully.", request.UserId);
+            return Ok(new { code = 200, message = "Logged out successfully." });
         }
     }
+
+    // DTO for refresh token requests
+    public class RefreshRequest
+    {
+        public string RefreshToken { get; set; }
+    }
+
+    // DTO for logout requests
+    public class LogoutRequest
+    {
+        public string UserId { get; set; }
+    }
 }
+

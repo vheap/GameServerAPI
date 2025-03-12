@@ -6,6 +6,8 @@ using WebApplication1.Utilities;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using WebApplication1.Configuration;
+using WebApplication1.Interface;
 
 namespace WebApplication1
 {
@@ -32,6 +34,12 @@ namespace WebApplication1
             builder.Services.AddSingleton<JwtService>();
             builder.Services.AddScoped<UserRepository>();
             builder.Services.AddSingleton<PasswordHasher>();
+
+            builder.Services.AddSingleton<ITokenRepository, TokenRepository>();
+            builder.Services.AddMemoryCache();
+
+            builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
+            builder.Services.AddSingleton<JwtService>();
 
             builder.Services.AddScoped<JwtService>();
             builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
