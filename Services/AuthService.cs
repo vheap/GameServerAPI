@@ -52,9 +52,20 @@ namespace WebApplication1.Services
             if (!_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
                 return new AuthResult(false, "Incorrect password.");
 
-            var token = _jwtService.GenerateToken(user);
+            var tokens = _jwtService.GenerateTokens(user.UserID.ToString(), user.Username);
+            if(tokens.AccessToken == null)
+                return new AuthResult(false, "Login failed. Bad AccessToken.");
 
+            if (tokens.RefreshToken == null)
+                return new AuthResult(false, "Login failed. Bad RefreshToken.");
+
+            return new AuthResult(true, "Login successful", tokens.AccessToken, tokens.RefreshToken);
+
+            var token = _jwtService.GenerateTokens(user.UserID.ToString(), user.Username).RefreshToken;
+            Console.WriteLine($"Debug: {token}");
             return new AuthResult(true, "Login successful.", token);
+
+
         }
 
     }

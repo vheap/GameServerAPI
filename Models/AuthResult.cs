@@ -4,13 +4,16 @@
     {
         public bool Success { get; set; }
         public string Message { get; set; }
-        public string? Token { get; set; } 
+        public string? AccessToken { get; set; }
+        public string? RefreshToken { get; set; }
 
-        public AuthResult(bool success, string message, string? token = null)
+
+        public AuthResult(bool success, string message, string? accessToken = null, string? refreshToken = null)
         {
             Success = success;
             Message = message;
-            Token = token;
+            AccessToken = accessToken;
+            RefreshToken = refreshToken;
         }
     }
 }

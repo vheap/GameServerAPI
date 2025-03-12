@@ -24,10 +24,12 @@ namespace WebApplication1
             // Database connection
             builder.Services.AddDbContext<AppDbContext>(options =>
                 options.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=GameServerDB;Trusted_Connection=True;"));
-            
+
+            builder.Services.AddMemoryCache();
 
             // Dependency injection
             builder.Services.AddScoped<AuthService>();
+            builder.Services.AddSingleton<JwtService>();
             builder.Services.AddScoped<UserRepository>();
             builder.Services.AddSingleton<PasswordHasher>();
 

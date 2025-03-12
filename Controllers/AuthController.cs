@@ -10,10 +10,12 @@ namespace WebApplication1.Controllers
     public class AuthController : ControllerBase
     {
         private readonly AuthService _authService;
+        private readonly JwtService _jwtService;
 
-        public AuthController(AuthService authService)
+        public AuthController(AuthService authService, JwtService jwtService)
         {
             _authService = authService;
+            _jwtService = jwtService;
         }
 
         [HttpPost("register")]
@@ -26,13 +28,25 @@ namespace WebApplication1.Controllers
         }
 
         [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] Models.LoginRequest request)
+        public IActionResult Login([FromBody] Models.LoginRequest request)
         {
-            var result = await _authService.LoginUserAsync(request);
-            if (!result.Success)
-                return BadRequest(result.Message);
+            var authResult = _authService.LoginUserAsync(request).Result;
+            if (!authResult.Success)
+            {
+                return Unauthorized(new { message = authResult.Message });
+            }
 
-            return Ok(new { token = result.Token, message = result.Message });
+            return Ok(new { success = authResult.Success, message = authResult.Message, accessToken = authResult.AccessToken, refreshToken = authResult.RefreshToken });
+        }
+        [HttpPost("refresh")]
+        public IActionResult RefreshToken([FromBody] string refreshToken)
+        {
+            var newAccessToken = _jwtService.RefreshAccessToken(refreshToken);
+            if (newAccessToken == null)
+            {
+                return Unauthorized(new { message = "Invalid or expired refresh token." });
+            }
+            return Ok(new { accessToken = newAccessToken });
         }
     }
 }
