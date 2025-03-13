@@ -122,10 +122,12 @@ namespace WebApplication1.Services
         {
             lock (_lock)
             {
+                _logger.LogCritical($"Remaining tokens before: {_userTokens.Count}");
                 if (_userTokens.TryRemove(userId, out var tokenPair))
                 {
                     _refreshToUser.TryRemove(tokenPair.RefreshToken, out _);
                     _logger.LogInformation("User {UserId} logged out, tokens removed.", userId);
+                    _logger.LogCritical($"Remaining tokens after: {_userTokens.Count}");
                 }
                 else
                 {

@@ -68,6 +68,65 @@ namespace WebApplication1.Services
 
         }
 
+        public async Task<AuthResult> ChangePasswordAsync(ChangePasswordRequest request)
+        {
+            var user = await _userRepository.GetUserByIdAsync(request.UserId);
+            if (user == null)
+                return new AuthResult(false, "User not found.");
+
+            if (!_passwordHasher.VerifyPassword(request.CurrentPassword, user.PasswordHash))
+                return new AuthResult(false, "Current password is incorrect.");
+
+            user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
+            await _userRepository.UpdateUserAsync(user);
+
+            // Invalidate existing tokens immediately. Very important, never leave behind inactive tokens.
+            await _jwtService.LogoutAsync(user.UserID.ToString());
+
+            return new AuthResult(true, "Password updated successfully. All active sessions have been invalidated.");
+        }
+
+        public async Task<AuthResult> ChangeAliasAsync(ChangeAliasRequest request)
+        {
+            var user = await _userRepository.GetUserByIdAsync(request.UserId);
+            if (user == null)
+                return new AuthResult(false, "User not found.");
+
+            // Validate alias using our rules
+            var (isValid, validationMessage) = ValidationRules.CheckAliasValidity(request.NewAlias);
+            if (!isValid)
+                return new AuthResult(false, validationMessage);
+
+            // Check if the alias already exists on a different user
+            bool aliasConflict = await _userRepository.CheckAliasConflictAsync(request.UserId, request.NewAlias);
+            if (aliasConflict)
+                return new AuthResult(false, "Alias is already taken by another user.");
+
+            user.Profile.Alias = request.NewAlias;
+            await _userRepository.UpdateUserAsync(user);
+            return new AuthResult(true, "Alias updated successfully.");
+        }
+
+        public async Task<AuthResult> ChangeEmailAsync(ChangeEmailRequest request)
+        {
+            var user = await _userRepository.GetUserByIdAsync(request.UserId);
+            if (user == null)
+                return new AuthResult(false, "User not found.");
+
+            // Validate email format
+            var (isValid, validationMessage) = ValidationRules.CheckEmailValidity(request.NewEmail);
+            if (!isValid)
+                return new AuthResult(false, validationMessage);
+
+            // Check if the email is already used by another account
+            bool emailConflict = await _userRepository.CheckEmailConflictAsync(request.UserId, request.NewEmail);
+            if (emailConflict)
+                return new AuthResult(false, "Email is already in use by another account.");
+
+            user.Email = request.NewEmail;
+            await _userRepository.UpdateUserAsync(user);
+            return new AuthResult(true, "Email updated successfully.");
+        }
 
     }
 }
