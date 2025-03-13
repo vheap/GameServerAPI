@@ -39,9 +39,9 @@ namespace WebApplication1
             builder.Services.AddMemoryCache();
 
             builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
-            builder.Services.AddSingleton<JwtService>();
+            //builder.Services.AddSingleton<JwtService>();
 
-            builder.Services.AddScoped<JwtService>();
+            //builder.Services.AddScoped<JwtService>();
             builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
                 {

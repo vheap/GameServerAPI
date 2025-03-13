@@ -61,6 +61,7 @@ namespace WebApplication1.Services
 
                 // Store the new tokens in memory.
                 _userTokens[userId] = tokenPair;
+                Console.WriteLine($"Created new UserID {userId}");
                 _refreshToUser[refreshToken] = userId;
 
                 _logger.LogInformation("Generated new tokens for user {UserId}.", userId);
@@ -155,6 +156,32 @@ namespace WebApplication1.Services
             var token = tokenHandler.CreateToken(tokenDescriptor);
             return tokenHandler.WriteToken(token);
         }
+        /// <summary>
+        /// Returns the access token and its remaining validity (in minutes) for the given userId, or null if not found.
+        /// </summary>
+        public Task<(string AccessToken, int RemainingValidityMinutes)?> GetTokenInfoByUserIdAsync(string userId)
+        {
+            lock (_lock)
+            {
+                if (_userTokens.TryGetValue(userId, out var tokenPair))
+                {
+                    var tokenHandler = new JwtSecurityTokenHandler();
+                    try
+                    {
+                        // Parse the token and use the ValidTo property which is automatically set
+                        var jwtToken = tokenHandler.ReadJwtToken(tokenPair.AccessToken);
+                        int remainingMinutes = (int)Math.Max(0, (jwtToken.ValidTo - DateTime.UtcNow).TotalMinutes);
+                        return Task.FromResult<(string, int)?>((tokenPair.AccessToken, remainingMinutes));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error reading JWT token for user {UserId}", userId);
+                    }
+                }
+                return Task.FromResult<(string, int)?>(null);
+            }
+        }
+
 
         // Generates a secure random refresh token.
         private string GenerateRefreshToken()

@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc;
+using System.IdentityModel.Tokens.Jwt;
 using WebApplication1.Services;
 
 namespace WebApplication1.Controllers
@@ -81,8 +82,84 @@ namespace WebApplication1.Controllers
             _logger.LogInformation("User {UserId} logged out successfully.", request.UserId);
             return Ok(new { code = 200, message = "Logged out successfully." });
         }
+        [HttpPost("debug-token")]
+        public async Task<IActionResult> DebugToken([FromBody] DebugTokenRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Token) && string.IsNullOrWhiteSpace(request.UserId))
+            {
+                return BadRequest(new { code = 400, message = "Please provide either a token or a user id." });
+            }
+
+            // If token is provided, decode it.
+            if (!string.IsNullOrWhiteSpace(request.Token))
+            {
+                var tokenHandler = new JwtSecurityTokenHandler();
+                try
+                {
+                    var jwtToken = tokenHandler.ReadJwtToken(request.Token);
+                    var userId = jwtToken.Subject;
+                    if (string.IsNullOrWhiteSpace(userId))
+                    {
+                        return BadRequest(new { code = 400, message = "Invalid token: no user id found in token." });
+                    }
+                    var expClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Exp);
+                    if (expClaim == null || !long.TryParse(expClaim.Value, out long expUnix))
+                    {
+                        return BadRequest(new { code = 400, message = "Invalid token: expiration claim not found or invalid." });
+                    }
+                    var expDateTime = DateTimeOffset.FromUnixTimeSeconds(expUnix).UtcDateTime;
+                    int remainingMinutes = (int)Math.Max(0, (expDateTime - DateTime.UtcNow).TotalMinutes);
+
+                    _logger.LogInformation("Debug-token: Provided token decodes to userId {UserId} with {RemainingMinutes} minutes remaining.", userId, remainingMinutes);
+                    return Ok(new
+                    {
+                        code = 200,
+                        message = "Success",
+                        userId = userId,
+                        token = request.Token,
+                        remainingValidityMinutes = remainingMinutes
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error processing token in debug-token endpoint.");
+                    return BadRequest(new { code = 400, message = "Invalid token format." });
+                }
+            }
+            // If userId is provided, look up the token info.
+            else if (!string.IsNullOrWhiteSpace(request.UserId))
+            {
+                var tokenInfo = await _jwtService.GetTokenInfoByUserIdAsync(request.UserId);
+                if (tokenInfo == null)
+                {
+                    _logger.LogWarning("Debug-token: No token found for user id {UserId}.", request.UserId);
+                    return NotFound(new { code = 404, message = "No token found for the provided user id." });
+                }
+                _logger.LogInformation("Debug-token: Retrieved token info for user id {UserId}.", request.UserId);
+                return Ok(new
+                {
+                    code = 200,
+                    message = "Success",
+                    userId = request.UserId,
+                    token = tokenInfo.Value.AccessToken,
+                    remainingValidityMinutes = tokenInfo.Value.RemainingValidityMinutes
+                });
+            }
+
+            return BadRequest(new { code = 400, message = "Invalid request. Provide either token or userId." });
+        }
     }
 
+
+   
+    
+
+
+        public class DebugTokenRequest
+    {
+        public string? Token { get; set; }
+        public string? UserId { get; set; }
+    }
     // DTO for refresh token requests
     public class RefreshRequest
     {
